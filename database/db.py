@@ -51,7 +51,7 @@ def get_connection():
     else:
         # SQLite подключение (согласно документации Bothost)
         # Путь к папке data
-        DATA_DIR = Path("/data")
+        DATA_DIR = Path("data")
         DATA_DIR.mkdir(parents=True, exist_ok=True)
 
         # Путь к базе данных
@@ -69,7 +69,7 @@ def init_db():
     """
     # Проверяем существование базы данных (для SQLite)
     if not USE_POSTGRES:
-        DATA_DIR = Path("/data")
+        DATA_DIR = Path("data")
         DB_PATH = DATA_DIR / DATABASE_NAME
 
         if DB_PATH.exists():
