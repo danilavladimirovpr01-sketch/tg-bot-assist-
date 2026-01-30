@@ -34,7 +34,9 @@ POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 USE_POSTGRES = bool(DATABASE_URL or (POSTGRES_HOST and POSTGRES_DB and POSTGRES_USER))
 
 # Путь к SQLite базе (если PostgreSQL не настроен)
-DATABASE_PATH = "database/bot_database.db"
+# На Bothost используем /data для постоянного хранения (не удаляется при Rebuild)
+# Локально - database/bot_database.db
+DATABASE_PATH = os.getenv("DATABASE_PATH", "/data/bot_database.db" if os.path.exists("/data") else "database/bot_database.db")
 
 # Настройки
 DEBUG = os.getenv("DEBUG", "False") == "True"
