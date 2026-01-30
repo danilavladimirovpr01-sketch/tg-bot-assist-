@@ -1,12 +1,53 @@
 # -*- coding: utf-8 -*-
 """
-Работа с базой данных SQLite
+Работа с базой данных (SQLite или PostgreSQL)
 Сохранение информации о пользователях и их действиях для статистики
 """
-import sqlite3
 import os
 from datetime import datetime
-from config import DATABASE_PATH
+from config import (
+    USE_POSTGRES, DATABASE_URL, POSTGRES_HOST, POSTGRES_PORT,
+    POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, DATABASE_PATH
+)
+
+# Импорты в зависимости от типа БД
+if USE_POSTGRES:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    from urllib.parse import urlparse
+else:
+    import sqlite3
+
+
+def get_connection():
+    """
+    Получить подключение к БД (SQLite или PostgreSQL)
+    """
+    if USE_POSTGRES:
+        # PostgreSQL подключение
+        if DATABASE_URL:
+            # Парсим DATABASE_URL (формат: postgresql://user:pass@host:port/dbname)
+            result = urlparse(DATABASE_URL)
+            return psycopg2.connect(
+                database=result.path[1:],
+                user=result.username,
+                password=result.password,
+                host=result.hostname,
+                port=result.port
+            )
+        else:
+            # Используем отдельные переменные
+            return psycopg2.connect(
+                host=POSTGRES_HOST,
+                port=POSTGRES_PORT,
+                database=POSTGRES_DB,
+                user=POSTGRES_USER,
+                password=POSTGRES_PASSWORD
+            )
+    else:
+        # SQLite подключение
+        os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
+        return sqlite3.connect(DATABASE_PATH)
 
 
 def init_db():
@@ -14,69 +55,114 @@ def init_db():
     Инициализация базы данных
     Создание таблиц если их нет
     """
-    # Создаем папку для БД если её нет
-    os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
-
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
 
-    # Таблица пользователей
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            username TEXT,
-            first_name TEXT,
-            last_name TEXT,
-            phone_number TEXT,
-            first_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
+    if USE_POSTGRES:
+        # PostgreSQL синтаксис
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                user_id BIGINT PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                phone_number TEXT,
+                first_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
-    # Таблица действий пользователей (для статистики)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_actions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            action_type TEXT,
-            action_data TEXT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(user_id)
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_actions (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT,
+                action_type TEXT,
+                action_data TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        ''')
 
-    # Таблица выбранных тарифов
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS tariff_selections (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            tariff_type TEXT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(user_id)
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS tariff_selections (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT,
+                tariff_type TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        ''')
+    else:
+        # SQLite синтаксис
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                phone_number TEXT,
+                first_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                action_type TEXT,
+                action_data TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS tariff_selections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                tariff_type TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        ''')
 
     conn.commit()
     conn.close()
-    print("База данных инициализирована")
+
+    db_type = "PostgreSQL" if USE_POSTGRES else "SQLite"
+    print(f"✅ База данных инициализирована ({db_type})")
 
 
 def add_or_update_user(user_id, username=None, first_name=None, last_name=None):
     """
     Добавить или обновить информацию о пользователе
     """
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute('''
-        INSERT INTO users (user_id, username, first_name, last_name)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET
-            username=excluded.username,
-            first_name=excluded.first_name,
-            last_name=excluded.last_name,
-            last_interaction=CURRENT_TIMESTAMP
-    ''', (user_id, username, first_name, last_name))
+    if USE_POSTGRES:
+        # PostgreSQL: используем %s вместо ?
+        cursor.execute('''
+            INSERT INTO users (user_id, username, first_name, last_name)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username=EXCLUDED.username,
+                first_name=EXCLUDED.first_name,
+                last_name=EXCLUDED.last_name,
+                last_interaction=CURRENT_TIMESTAMP
+        ''', (user_id, username, first_name, last_name))
+    else:
+        # SQLite: используем ?
+        cursor.execute('''
+            INSERT INTO users (user_id, username, first_name, last_name)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username=excluded.username,
+                first_name=excluded.first_name,
+                last_name=excluded.last_name,
+                last_interaction=CURRENT_TIMESTAMP
+        ''', (user_id, username, first_name, last_name))
 
     conn.commit()
     conn.close()
@@ -85,21 +171,14 @@ def add_or_update_user(user_id, username=None, first_name=None, last_name=None):
 def log_action(user_id, action_type, action_data=None):
     """
     Записать действие пользователя для статистики
-
-    action_type примеры:
-    - 'start' - запустил бота
-    - 'view_tariffs' - посмотрел тарифы
-    - 'view_about' - посмотрел об авторах
-    - 'ask_question' - нажал "Задать вопрос"
-    - 'select_basic' - выбрал базовый тариф
-    - 'select_assistant' - выбрал тариф "Ассистент для ассистента"
     """
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute('''
+    placeholder = '%s' if USE_POSTGRES else '?'
+    cursor.execute(f'''
         INSERT INTO user_actions (user_id, action_type, action_data)
-        VALUES (?, ?, ?)
+        VALUES ({placeholder}, {placeholder}, {placeholder})
     ''', (user_id, action_type, action_data))
 
     conn.commit()
@@ -109,15 +188,14 @@ def log_action(user_id, action_type, action_data=None):
 def log_tariff_selection(user_id, tariff_type):
     """
     Записать выбор тарифа пользователем
-
-    tariff_type: 'basic' или 'assistant'
     """
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute('''
+    placeholder = '%s' if USE_POSTGRES else '?'
+    cursor.execute(f'''
         INSERT INTO tariff_selections (user_id, tariff_type)
-        VALUES (?, ?)
+        VALUES ({placeholder}, {placeholder})
     ''', (user_id, tariff_type))
 
     conn.commit()
@@ -128,7 +206,7 @@ def get_user_count():
     """
     Получить общее количество пользователей
     """
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute('SELECT COUNT(*) FROM users')
@@ -142,7 +220,7 @@ def get_tariff_stats():
     """
     Получить статистику по выбранным тарифам
     """
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute('''
@@ -175,13 +253,14 @@ def save_phone_number(user_id, phone_number):
     """
     Сохранить номер телефона пользователя
     """
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    placeholder = '%s' if USE_POSTGRES else '?'
+    cursor.execute(f"""
         UPDATE users
-        SET phone_number = ?
-        WHERE user_id = ?
+        SET phone_number = {placeholder}
+        WHERE user_id = {placeholder}
     """, (phone_number, user_id))
 
     conn.commit()
@@ -192,13 +271,14 @@ def get_user_phone(user_id):
     """
     Получить номер телефона пользователя
     """
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    placeholder = '%s' if USE_POSTGRES else '?'
+    cursor.execute(f"""
         SELECT phone_number
         FROM users
-        WHERE user_id = ?
+        WHERE user_id = {placeholder}
     """, (user_id,))
 
     result = cursor.fetchone()
@@ -211,7 +291,7 @@ def get_users_with_contacts(limit=None):
     """
     Получить пользователей с контактами
     """
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
 
     query = """
@@ -247,7 +327,7 @@ def get_all_user_ids():
     """
     Получить все user_id для рассылки
     """
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("SELECT user_id FROM users")
@@ -261,7 +341,7 @@ def get_contacts_count():
     """
     Количество пользователей, оставивших контакты
     """
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -279,16 +359,23 @@ def get_recent_users_count(days=1):
     """
     Количество новых пользователей за последние N дней
     """
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT COUNT(*) FROM users
-        WHERE first_interaction >= datetime('now', '-{} days')
-    """.format(days))
+    if USE_POSTGRES:
+        # PostgreSQL синтаксис для дат
+        cursor.execute("""
+            SELECT COUNT(*) FROM users
+            WHERE first_interaction >= NOW() - INTERVAL '%s days'
+        """, (days,))
+    else:
+        # SQLite синтаксис для дат
+        cursor.execute("""
+            SELECT COUNT(*) FROM users
+            WHERE first_interaction >= datetime('now', '-{} days')
+        """.format(days))
 
     result = cursor.fetchone()
     conn.close()
 
     return result[0] if result else 0
-

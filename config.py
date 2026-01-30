@@ -20,7 +20,20 @@ if admin_ids_str:
 else:
     ADMIN_IDS = []
 
-# Путь к базе данных
+# База данных - SQLite (локально) или PostgreSQL (Bothost)
+# Если есть DATABASE_URL или POSTGRES_* переменные - используем PostgreSQL
+# Иначе - SQLite
+DATABASE_URL = os.getenv("DATABASE_URL")  # Формат: postgresql://user:pass@host:port/dbname
+POSTGRES_HOST = os.getenv("POSTGRES_HOST")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+POSTGRES_DB = os.getenv("POSTGRES_DB", os.getenv("POSTGRES_DATABASE"))
+POSTGRES_USER = os.getenv("POSTGRES_USER")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+
+# Определяем тип БД
+USE_POSTGRES = bool(DATABASE_URL or (POSTGRES_HOST and POSTGRES_DB and POSTGRES_USER))
+
+# Путь к SQLite базе (если PostgreSQL не настроен)
 DATABASE_PATH = "database/bot_database.db"
 
 # Настройки
