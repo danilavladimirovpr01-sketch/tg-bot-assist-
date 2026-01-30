@@ -4,12 +4,15 @@
 Сохранение информации о пользователях и их действиях для статистики
 """
 import os
+import logging
 from datetime import datetime
 from pathlib import Path
 from config import (
     USE_POSTGRES, DATABASE_URL, POSTGRES_HOST, POSTGRES_PORT,
     POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, DATABASE_NAME
 )
+
+logger = logging.getLogger(__name__)
 
 # Импорты в зависимости от типа БД
 if USE_POSTGRES:
@@ -70,9 +73,9 @@ def init_db():
         DB_PATH = DATA_DIR / DATABASE_NAME
 
         if DB_PATH.exists():
-            print(f"✅ База данных уже существует: {DB_PATH}")
+            logger.info(f"✅ База данных уже существует: {DB_PATH}")
         else:
-            print(f"🔨 Создаём новую базу данных: {DB_PATH}")
+            logger.info(f"🔨 Создаём новую базу данных: {DB_PATH}")
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -150,7 +153,7 @@ def init_db():
     conn.close()
 
     db_type = "PostgreSQL" if USE_POSTGRES else "SQLite"
-    print(f"✅ База данных инициализирована ({db_type})")
+    logger.info(f"✅ База данных инициализирована ({db_type})")
 
 
 def add_or_update_user(user_id, username=None, first_name=None, last_name=None):
