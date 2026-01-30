@@ -5,6 +5,7 @@
 """
 import os
 from datetime import datetime
+from pathlib import Path
 from config import (
     USE_POSTGRES, DATABASE_URL, POSTGRES_HOST, POSTGRES_PORT,
     POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, DATABASE_PATH
@@ -45,9 +46,11 @@ def get_connection():
                 password=POSTGRES_PASSWORD
             )
     else:
-        # SQLite подключение
-        os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
-        return sqlite3.connect(DATABASE_PATH)
+        # SQLite подключение (согласно документации Bothost)
+        DATA_DIR = Path("/data")
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        DB_PATH = Path(DATABASE_PATH)
+        return sqlite3.connect(str(DB_PATH))
 
 
 def init_db():

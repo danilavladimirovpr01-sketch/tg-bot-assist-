@@ -19,6 +19,7 @@ build/
 # База данных
 *.db
 database/*.db
+/data/
 
 # IDE
 .vscode/
