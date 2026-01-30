@@ -33,10 +33,10 @@ POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 # Определяем тип БД
 USE_POSTGRES = bool(DATABASE_URL or (POSTGRES_HOST and POSTGRES_DB and POSTGRES_USER))
 
-# Путь к SQLite базе (если PostgreSQL не настроен)
-# По умолчанию используем /data (Bothost) - папка постоянного хранения
-# Локально можно переопределить через DATABASE_PATH=database/bot_database.db в .env
-DATABASE_PATH = os.getenv("DATABASE_PATH", "/data/bot_database.db")
+# База данных SQLite (если PostgreSQL не настроен)
+# По умолчанию: bot_database.db в папке /data
+# Можно переопределить через DATABASE_NAME=mybot.db
+DATABASE_NAME = os.getenv("DATABASE_NAME", "bot_database.db")
 
 # Настройки
 DEBUG = os.getenv("DEBUG", "False") == "True"

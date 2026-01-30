@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from config import (
     USE_POSTGRES, DATABASE_URL, POSTGRES_HOST, POSTGRES_PORT,
-    POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, DATABASE_PATH
+    POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, DATABASE_NAME
 )
 
 # Импорты в зависимости от типа БД
@@ -47,10 +47,16 @@ def get_connection():
             )
     else:
         # SQLite подключение (согласно документации Bothost)
+        # Путь к папке data
         DATA_DIR = Path("/data")
         DATA_DIR.mkdir(parents=True, exist_ok=True)
-        DB_PATH = Path(DATABASE_PATH)
-        return sqlite3.connect(str(DB_PATH))
+
+        # Путь к базе данных
+        DB_PATH = DATA_DIR / DATABASE_NAME
+
+        # Подключаемся к базе
+        conn = sqlite3.connect(str(DB_PATH))
+        return conn
 
 
 def init_db():
@@ -58,6 +64,16 @@ def init_db():
     Инициализация базы данных
     Создание таблиц если их нет
     """
+    # Проверяем существование базы данных (для SQLite)
+    if not USE_POSTGRES:
+        DATA_DIR = Path("/data")
+        DB_PATH = DATA_DIR / DATABASE_NAME
+
+        if DB_PATH.exists():
+            print(f"✅ База данных уже существует: {DB_PATH}")
+        else:
+            print(f"🔨 Создаём новую базу данных: {DB_PATH}")
+
     conn = get_connection()
     cursor = conn.cursor()
 
