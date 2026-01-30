@@ -86,6 +86,20 @@ def get_ask_question_keyboard():
     return builder.as_markup()
 
 
+def get_admin_menu_keyboard():
+    """
+    Меню админ-панели (по команде /admin):
+    - Статистика, Пользователи, Экспорт, Рассылка
+    """
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📊 Статистика", callback_data="admin:stats")
+    builder.button(text="👥 Пользователи", callback_data="admin:users")
+    builder.button(text="📤 Экспорт", callback_data="admin:export")
+    builder.button(text="📢 Рассылка", callback_data="admin:broadcast")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def get_contact_request_keyboard():
     """
     Клавиатура для запроса контакта (номера телефона)

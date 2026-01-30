@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 
 from texts.messages import (
     get_welcome_message,
-    TARIFFS_MESSAGE,
+    get_tariffs_text_and_entities,
     BASIC_TARIFF_MESSAGE,
     ASSISTANT_TARIFF_MESSAGE,
     ABOUT_AUTHORS_MESSAGE,
@@ -56,10 +56,13 @@ async def callback_tariffs(callback: CallbackQuery, state: FSMContext):
     phone = get_user_phone(user_id)
 
     if phone:
-        # Контакт уже есть, показываем тарифы
+        # Контакт уже есть, показываем тарифы (через entities — раскрывающиеся цитаты)
         log_action(user_id, 'view_tariffs')
+        text, entities = get_tariffs_text_and_entities()
         await callback.message.edit_text(
-            text=TARIFFS_MESSAGE,
+            text=text,
+            entities=entities,
+            parse_mode=None,
             reply_markup=get_tariffs_keyboard()
         )
         await callback.answer()

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Админ-панель бота
-Команды для администратора: статистика, экспорт, рассылки
+Команда /admin — меню с кнопками (Статистика, Пользователи, Экспорт, Рассылка)
 """
 import asyncio
 import csv
@@ -9,7 +9,7 @@ import io
 from datetime import datetime
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, BufferedInputFile
+from aiogram.types import Message, BufferedInputFile, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -22,6 +22,7 @@ from database.db import (
     get_contacts_count,
     get_recent_users_count
 )
+from keyboards.inline import get_admin_menu_keyboard
 
 
 router = Router()
@@ -42,41 +43,16 @@ def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
 
-@router.message(Command("myid"))
-async def cmd_myid(message: Message):
-    """
-    Показать свой Telegram ID
-    Доступно всем пользователям
-    """
-    user_id = message.from_user.id
-    await message.answer(
-        f"<b>Ваш Telegram ID:</b> <code>{user_id}</code>\n\n"
-        f"Этот ID можно использовать для настройки прав администратора."
-    )
-
-
-@router.message(Command("admin", "stats"))
-async def cmd_admin(message: Message):
-    """
-    Показать общую статистику бота
-    Доступно только админу
-    """
-    if not is_admin(message.from_user.id):
-        await message.answer("У вас нет прав для использования этой команды.")
-        return
-
-    # Собираем статистику
+def _build_stats_text() -> str:
+    """Формирует текст статистики (для команды и для callback)."""
     total_users = get_user_count()
     contacts_count = get_contacts_count()
     tariff_stats = get_tariff_stats()
-
     today = get_recent_users_count(1)
     week = get_recent_users_count(7)
     month = get_recent_users_count(30)
-
     contacts_percent = round(contacts_count / total_users * 100) if total_users > 0 else 0
-
-    stats_text = f"""
+    return f"""
 📊 <b>Статистика бота</b>
 
 👥 <b>Всего пользователей:</b> {total_users}
@@ -95,52 +71,78 @@ async def cmd_admin(message: Message):
 <i>Обновлено: {datetime.now().strftime('%d.%m.%Y %H:%M')}</i>
 """
 
-    await message.answer(stats_text)
 
-
-@router.message(Command("users"))
-async def cmd_users(message: Message):
-    """
-    Список пользователей с контактами
-    Доступно только админу
-    """
-    if not is_admin(message.from_user.id):
-        await message.answer("У вас нет прав для использования этой команды.")
-        return
-
+def _build_users_text() -> str:
+    """Формирует текст списка пользователей с контактами (первые 10)."""
     users = get_users_with_contacts(limit=10)
     total_contacts = get_contacts_count()
-
     if not users:
-        await message.answer("Пока нет пользователей с контактами.")
-        return
-
+        return "Пока нет пользователей с контактами."
     users_text = "👥 <b>Пользователи с контактами</b> (первые 10):\n\n"
-
     for idx, user in enumerate(users, 1):
         user_id, username, first_name, last_name, phone, registered, tariff = user
-
         name = first_name or "Без имени"
         if last_name:
             name += f" {last_name}"
-
         username_str = f"@{username}" if username else ""
         tariff_emoji = "💼" if tariff == "basic" else "⭐" if tariff == "assistant" else "❓"
         tariff_name = "Базовый" if tariff == "basic" else "Ассистент" if tariff == "assistant" else "Не выбран"
-
         reg_date = datetime.fromisoformat(registered).strftime('%d.%m.%Y')
-
         users_text += f"""
 {idx}. <b>{name}</b> {username_str}
    📱 <code>{phone}</code>
    🎯 Тариф: {tariff_emoji} {tariff_name}
    📅 Зарегистрирован: {reg_date}
 """
-
     users_text += f"\n<i>Показано 10 из {total_contacts}</i>\n"
-    users_text += "<i>Используйте /export для полной выгрузки</i>"
+    users_text += "<i>Используйте кнопку «Экспорт» для полной выгрузки</i>"
+    return users_text
 
-    await message.answer(users_text)
+
+@router.message(Command("myid"))
+async def cmd_myid(message: Message):
+    """
+    Показать свой Telegram ID
+    Доступно всем пользователям
+    """
+    user_id = message.from_user.id
+    await message.answer(
+        f"<b>Ваш Telegram ID:</b> <code>{user_id}</code>\n\n"
+        f"Этот ID можно использовать для настройки прав администратора."
+    )
+
+
+@router.message(Command("admin"))
+async def cmd_admin(message: Message):
+    """
+    Показать админ-меню с кнопками (Статистика, Пользователи, Экспорт, Рассылка)
+    Доступно только админу
+    """
+    if not is_admin(message.from_user.id):
+        await message.answer("У вас нет прав для использования этой команды.")
+        return
+    await message.answer(
+        "🔐 <b>Админ-панель</b>\n\nВыберите действие:",
+        reply_markup=get_admin_menu_keyboard()
+    )
+
+
+@router.message(Command("stats"))
+async def cmd_stats(message: Message):
+    """Показать статистику (доступно по /stats или из меню)."""
+    if not is_admin(message.from_user.id):
+        await message.answer("У вас нет прав для использования этой команды.")
+        return
+    await message.answer(_build_stats_text())
+
+
+@router.message(Command("users"))
+async def cmd_users(message: Message):
+    """Список пользователей с контактами (доступно по /users или из меню)."""
+    if not is_admin(message.from_user.id):
+        await message.answer("У вас нет прав для использования этой команды.")
+        return
+    await message.answer(_build_users_text())
 
 
 @router.message(Command("export"))
@@ -334,4 +336,90 @@ async def broadcast_confirmation(message: Message, state: FSMContext):
         f"✅ Успешно: {success}\n"
         f"❌ Ошибок: {failed} (заблокировали бота)\n"
         f"⏱ Время: {int(duration)} сек"
+    )
+
+
+# --- Обработчики кнопок админ-меню (callback) ---
+
+@router.callback_query(F.data == "admin:stats")
+async def callback_admin_stats(callback: CallbackQuery):
+    """Кнопка «Статистика» в админ-меню."""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await callback.message.answer(_build_stats_text())
+
+
+@router.callback_query(F.data == "admin:users")
+async def callback_admin_users(callback: CallbackQuery):
+    """Кнопка «Пользователи» в админ-меню."""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await callback.message.answer(_build_users_text())
+
+
+@router.callback_query(F.data == "admin:export")
+async def callback_admin_export(callback: CallbackQuery):
+    """Кнопка «Экспорт» в админ-меню."""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    msg = callback.message
+    await msg.answer("📤 Экспорт базы контактов...")
+    users = get_users_with_contacts()
+    if not users:
+        await msg.answer("Нет пользователей с контактами для экспорта.")
+        return
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=';')
+    writer.writerow([
+        'ID', 'Username', 'Имя', 'Фамилия', 'Телефон', 'Тариф', 'Дата регистрации'
+    ])
+    for user in users:
+        user_id, username, first_name, last_name, phone, registered, tariff = user
+        tariff_name = {
+            'basic': 'Базовый',
+            'assistant': 'Ассистент для ассистента',
+            None: 'Не выбран'
+        }.get(tariff, 'Не выбран')
+        try:
+            reg_date = datetime.fromisoformat(registered).strftime('%d.%m.%Y %H:%M')
+        except Exception:
+            reg_date = registered
+        writer.writerow([
+            user_id,
+            f"@{username}" if username else '',
+            first_name or '',
+            last_name or '',
+            phone,
+            tariff_name,
+            reg_date
+        ])
+    csv_bytes = output.getvalue().encode('utf-8-sig')
+    output.close()
+    filename = f"contacts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    file = BufferedInputFile(csv_bytes, filename=filename)
+    await msg.answer_document(
+        document=file,
+        caption=f"✅ Экспортировано {len(users)} контактов"
+    )
+
+
+@router.callback_query(F.data == "admin:broadcast")
+async def callback_admin_broadcast(callback: CallbackQuery, state: FSMContext):
+    """Кнопка «Рассылка» в админ-меню — запуск FSM рассылки."""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    total_users = get_user_count()
+    await state.set_state(BroadcastState.waiting_for_message)
+    await callback.message.answer(
+        f"📢 <b>Рассылка сообщений</b>\n\n"
+        f"Отправьте текст сообщения, который хотите разослать всем пользователям ({total_users} чел.).\n\n"
+        f"Для отмены используйте /cancel"
     )
